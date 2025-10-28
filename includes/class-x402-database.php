@@ -91,21 +91,38 @@ class X402_Database {
             'encrypted_data' => '',
             'session_token' => '',
             'expires_at' => null,
-            'created_at' => current_time('mysql'),
-            'updated_at' => current_time('mysql'),
+            'verified_at' => null,
+            'created_at' => current_time('mysql', true),
+            'updated_at' => current_time('mysql', true),
         );
         
         $payment_data = wp_parse_args($payment_data, $defaults);
-        
+
         // Encrypt sensitive data
         if (!empty($payment_data['encrypted_data'])) {
-            $payment_data['encrypted_data'] = X402_Security::encrypt($payment_data['encrypted_data']);
+            $encrypted = X402_Security::encrypt($payment_data['encrypted_data']);
+            $payment_data['encrypted_data'] = $encrypted ? $encrypted : '';
         }
-        
+
+        $data_to_insert = array(
+            'post_id' => $payment_data['post_id'],
+            'wallet_address' => $payment_data['wallet_address'],
+            'transaction_signature' => $payment_data['transaction_signature'],
+            'amount' => $payment_data['amount'],
+            'currency' => $payment_data['currency'],
+            'status' => $payment_data['status'],
+            'encrypted_data' => $payment_data['encrypted_data'],
+            'session_token' => $payment_data['session_token'],
+            'expires_at' => $payment_data['expires_at'],
+            'verified_at' => $payment_data['verified_at'],
+            'created_at' => $payment_data['created_at'],
+            'updated_at' => $payment_data['updated_at'],
+        );
+
         $result = $wpdb->insert(
             $table_name,
-            $payment_data,
-            array('%d', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
+            $data_to_insert,
+            array('%d', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
         );
         
         if ($result === false) {
@@ -129,11 +146,11 @@ class X402_Database {
         
         $update_data = array(
             'status' => sanitize_text_field($status),
-            'updated_at' => current_time('mysql')
+            'updated_at' => current_time('mysql', true)
         );
-        
+
         if ($status === 'verified') {
-            $update_data['verified_at'] = current_time('mysql');
+            $update_data['verified_at'] = current_time('mysql', true);
         }
         
         // Merge additional data

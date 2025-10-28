@@ -239,6 +239,11 @@ WordPress integration by X402 Network
 
 ## Changelog
 
+### 1.1.0
+- Production-grade Solana RPC verification with balance validation for merchant and customer wallets.
+- Hardened AJAX endpoint security, nonce handling, and timestamp storage for ecommerce compliance.
+- Localized frontend messaging for international shoppers and improved error feedback.
+
 ### 1.0.0
 - Initial release
 - Core paywall functionality
