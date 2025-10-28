@@ -32,16 +32,19 @@ class X402_API {
      */
     public static function verify_payment() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !X402_Security::verify_nonce($_POST['nonce'])) {
-            wp_send_json_error(array(
-                'message' => __('Security check failed', 'x402-solana-paywall')
-            ), 403);
+        if (!check_ajax_referer('x402_payment_nonce', 'nonce', false)) {
+            wp_send_json_error(
+                array(
+                    'message' => __('Security check failed', 'x402-solana-paywall'),
+                ),
+                403
+            );
         }
-        
+
         // Get and validate input
-        $post_id = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
-        $signature = isset($_POST['signature']) ? sanitize_text_field($_POST['signature']) : '';
-        $wallet_address = isset($_POST['wallet_address']) ? sanitize_text_field($_POST['wallet_address']) : '';
+        $post_id = isset($_POST['post_id']) ? absint(wp_unslash($_POST['post_id'])) : 0;
+        $signature = isset($_POST['signature']) ? sanitize_text_field(wp_unslash($_POST['signature'])) : '';
+        $wallet_address = isset($_POST['wallet_address']) ? sanitize_text_field(wp_unslash($_POST['wallet_address'])) : '';
         
         if (empty($post_id) || empty($signature) || empty($wallet_address)) {
             wp_send_json_error(array(

@@ -3,7 +3,7 @@
  * Plugin Name: X402 Solana Paywall
  * Plugin URI: https://github.com/mondb-dev/x402-wp
  * Description: Bank-level secure cryptocurrency paywall for WordPress content using Solana blockchain. Based on x402-solana protocol.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: X402 Network
  * Author URI: https://github.com/payAINetwork/x402-solana
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('X402_VERSION', '1.0.0');
+define('X402_VERSION', '1.1.0');
 define('X402_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('X402_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('X402_PLUGIN_FILE', __FILE__);
@@ -178,11 +178,23 @@ class X402_Solana_Paywall {
         );
         
         // Localize script with nonce and AJAX URL
-        wp_localize_script('x402-frontend', 'x402_ajax', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('x402_payment_nonce'),
-            'post_id' => get_the_ID(),
-        ));
+        wp_localize_script(
+            'x402-frontend',
+            'x402_ajax',
+            array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce'    => wp_create_nonce('x402_payment_nonce'),
+                'post_id'  => get_the_ID(),
+                'messages' => array(
+                    'wallet_required'    => esc_html__( 'Please enter your wallet address.', 'x402-solana-paywall' ),
+                    'signature_required' => esc_html__( 'Please enter the transaction signature.', 'x402-solana-paywall' ),
+                    'verifying'          => esc_html__( 'Verifying…', 'x402-solana-paywall' ),
+                    'verify'             => esc_html__( 'Verify Payment', 'x402-solana-paywall' ),
+                    'generic_error'      => esc_html__( 'An error occurred. Please try again.', 'x402-solana-paywall' ),
+                    'rate_limited'       => esc_html__( 'Too many requests. Please wait a moment and try again.', 'x402-solana-paywall' ),
+                ),
+            )
+        );
     }
     
     /**

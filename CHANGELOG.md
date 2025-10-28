@@ -5,6 +5,18 @@ All notable changes to the X402 Solana Paywall plugin will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-10-28
+
+### Changed
+- Replaced simulated Solana verification with production-ready RPC validation that confirms merchant deposits and payer signatures.
+- Hardened AJAX endpoint handling with core `check_ajax_referer`, unslashed input processing, and improved error messaging.
+- Normalized database timestamps to UTC, recorded verification times, and enforced configurable session expiry windows.
+- Localized frontend feedback strings and ensured ecommerce-facing responses meet WordPress internationalization standards.
+
+### Security
+- Prevented re-use of Solana signatures across different posts and rejected stale transactions beyond 24 hours.
+- Added stricter validation of merchant wallet configuration and payer participation before granting access tokens.
+
 ## [1.0.0] - 2025-10-28
 
 ### Added

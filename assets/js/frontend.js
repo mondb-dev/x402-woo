@@ -45,19 +45,19 @@
         
         // Validate inputs
         if (!walletAddress) {
-            showError('Please enter your wallet address');
+            showError(getMessage('wallet_required'));
             $walletInput.focus();
             return;
         }
-        
+
         if (!signature) {
-            showError('Please enter the transaction signature');
+            showError(getMessage('signature_required'));
             $signatureInput.focus();
             return;
         }
-        
+
         // Disable button and show loading
-        $button.prop('disabled', true).text('Verifying...');
+        $button.prop('disabled', true).text(getMessage('verifying'));
         $status.hide();
         
         // Send AJAX request
@@ -80,21 +80,21 @@
                         window.location.reload();
                     }, 1500);
                 } else {
-                    showError(response.data.message || 'Payment verification failed');
-                    $button.prop('disabled', false).text('Verify Payment');
+                    showError(response.data.message || getMessage('generic_error'));
+                    $button.prop('disabled', false).text(getMessage('verify'));
                 }
             },
             error: function(xhr, status, error) {
-                var message = 'An error occurred. Please try again.';
-                
+                var message = getMessage('generic_error');
+
                 if (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
                     message = xhr.responseJSON.data.message;
                 } else if (xhr.status === 429) {
-                    message = 'Too many requests. Please wait a moment and try again.';
+                    message = getMessage('rate_limited');
                 }
-                
+
                 showError(message);
-                $button.prop('disabled', false).text('Verify Payment');
+                $button.prop('disabled', false).text(getMessage('verify'));
             }
         });
     }
@@ -121,6 +121,17 @@
             .addClass('x402-error')
             .html('<span class="x402-icon">✗</span> ' + escapeHtml(message))
             .fadeIn();
+    }
+
+    /**
+     * Retrieve a localized message with a fallback key
+     */
+    function getMessage(key) {
+        if (typeof x402_ajax !== 'undefined' && x402_ajax.messages && x402_ajax.messages[key]) {
+            return x402_ajax.messages[key];
+        }
+
+        return key;
     }
     
     /**
