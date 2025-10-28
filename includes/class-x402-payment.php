@@ -155,7 +155,7 @@ class X402_Payment {
      */
     private static function verify_on_chain($signature, $wallet_address, $merchant_wallet, $required_amount) {
         // Get Solana network configuration
-        $network      = get_option('x402_solana_network', 'mainnet-beta');
+        $network      = get_option('x402_solana_network', 'testnet');
         $rpc_endpoint = self::get_rpc_endpoint($network);
 
         if (empty($rpc_endpoint)) {
