@@ -1,0 +1,55 @@
+/**
+ * Admin styles for X402 Solana Paywall
+ */
+
+.x402-meta-box label {
+    display: block;
+    margin: 10px 0;
+}
+
+.x402-meta-box input[type="number"] {
+    width: 80px;
+}
+
+.x402-stats {
+    background: #f0f0f1;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 15px;
+}
+
+.x402-stats h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+}
+
+.x402-stats p {
+    margin: 5px 0;
+    font-size: 13px;
+}
+
+.x402-security-info {
+    background: #f0f0f1;
+    padding: 20px;
+    border-left: 4px solid #4CAF50;
+    margin-top: 20px;
+}
+
+.x402-security-info p {
+    margin: 8px 0;
+}
+
+/* Admin columns */
+.column-x402_paywall {
+    width: 120px;
+}
+
+/* Settings page */
+.x402-settings-section {
+    margin-bottom: 30px;
+}
+
+.x402-settings-section h2 {
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 10px;
+}
