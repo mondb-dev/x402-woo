@@ -66,7 +66,7 @@ class X402_Admin {
         register_setting('x402_settings', 'x402_solana_network', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_text_field',
-            'default' => 'mainnet-beta'
+            'default' => 'testnet'
         ));
         
         register_setting('x402_settings', 'x402_custom_rpc_endpoint', array(
@@ -150,14 +150,15 @@ class X402_Admin {
                             </label>
                         </th>
                         <td>
+                            <?php $current_network = get_option('x402_solana_network', 'testnet'); ?>
                             <select id="x402_solana_network" name="x402_solana_network">
-                                <option value="mainnet-beta" <?php selected(get_option('x402_solana_network', 'mainnet-beta'), 'mainnet-beta'); ?>>
+                                <option value="mainnet-beta" <?php selected($current_network, 'mainnet-beta'); ?>>
                                     <?php echo esc_html__('Mainnet Beta', 'x402-solana-paywall'); ?>
                                 </option>
-                                <option value="testnet" <?php selected(get_option('x402_solana_network'), 'testnet'); ?>>
+                                <option value="testnet" <?php selected($current_network, 'testnet'); ?>>
                                     <?php echo esc_html__('Testnet', 'x402-solana-paywall'); ?>
                                 </option>
-                                <option value="devnet" <?php selected(get_option('x402_solana_network'), 'devnet'); ?>>
+                                <option value="devnet" <?php selected($current_network, 'devnet'); ?>>
                                     <?php echo esc_html__('Devnet', 'x402-solana-paywall'); ?>
                                 </option>
                             </select>

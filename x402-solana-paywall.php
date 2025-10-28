@@ -117,7 +117,7 @@ class X402_Solana_Paywall {
      */
     private function set_default_options() {
         $defaults = array(
-            'x402_solana_network' => 'mainnet-beta',
+            'x402_solana_network' => 'testnet',
             'x402_default_currency' => 'SOL',
             'x402_enable_logging' => true,
             'x402_session_timeout' => 3600,
