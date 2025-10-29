@@ -22,9 +22,12 @@ class X402_API {
     public static function init() {
         // AJAX endpoints for logged in users
         add_action('wp_ajax_x402_verify_payment', array(__CLASS__, 'verify_payment'));
-        
+
         // AJAX endpoints for non-logged in users
         add_action('wp_ajax_nopriv_x402_verify_payment', array(__CLASS__, 'verify_payment'));
+
+        // REST endpoints for x402 payment integrations
+        add_action('rest_api_init', array(__CLASS__, 'register_rest_routes'));
     }
     
     /**
@@ -71,5 +74,98 @@ class X402_API {
             'message' => $result['message'],
             'reload' => true
         ));
+    }
+
+    /**
+     * Register REST routes used by the WooCommerce gateway.
+     */
+    public static function register_rest_routes() {
+        register_rest_route(
+            'x402/v1',
+            '/orders/(?P<order_id>\d+)',
+            array(
+                'methods'             => WP_REST_Server::READABLE,
+                'callback'            => array(__CLASS__, 'get_order_payment_request'),
+                'permission_callback' => '__return_true',
+                'args'                => array(
+                    'order_id' => array(
+                        'required'          => true,
+                        'sanitize_callback' => 'absint',
+                        'validate_callback' => function ($param) {
+                            return is_numeric($param) && (int) $param > 0;
+                        },
+                    ),
+                    'key' => array(
+                        'required'          => true,
+                        'sanitize_callback' => 'sanitize_text_field',
+                    ),
+                ),
+            )
+        );
+    }
+
+    /**
+     * Provide serialized payment requirements for an order if available.
+     *
+     * @param WP_REST_Request $request Request instance.
+     * @return WP_REST_Response|WP_Error
+     */
+    public static function get_order_payment_request(WP_REST_Request $request) {
+        if (!class_exists('WC_Order')) {
+            return new WP_Error('woocommerce_missing', __('WooCommerce must be active to use x402 payments.', 'x402-solana-paywall'), array('status' => 500));
+        }
+
+        $order_id = (int) $request->get_param('order_id');
+        $order    = wc_get_order($order_id);
+
+        if (!$order instanceof WC_Order) {
+            return new WP_Error('order_not_found', __('Order not found.', 'x402-solana-paywall'), array('status' => 404));
+        }
+
+        $provided_key = (string) $request->get_param('key');
+
+        if ($order->get_order_key() !== $provided_key) {
+            return new WP_Error('forbidden', __('Invalid order access key.', 'x402-solana-paywall'), array('status' => 403));
+        }
+
+        if ($order->get_payment_method() !== 'x402') {
+            return new WP_Error('invalid_payment_method', __('Order is not configured for x402 payments.', 'x402-solana-paywall'), array('status' => 400));
+        }
+
+        $stored_payload = $order->get_meta('_x402_payment_requirements');
+
+        if (!empty($stored_payload)) {
+            $data = json_decode($stored_payload, true);
+            if (is_array($data)) {
+                return rest_ensure_response(
+                    array(
+                        'response' => $data,
+                        'encoded'  => base64_encode($stored_payload),
+                    )
+                );
+            }
+        }
+
+        if (!class_exists('X402_WooCommerce_Gateway')) {
+            return new WP_Error('gateway_unavailable', __('x402 payment gateway is unavailable.', 'x402-solana-paywall'), array('status' => 500));
+        }
+
+        $gateway = new X402_WooCommerce_Gateway();
+
+        try {
+            $payload = $gateway->build_payment_request_payload($order);
+        } catch (Exception $exception) {
+            return new WP_Error('payment_error', $exception->getMessage(), array('status' => 500));
+        }
+
+        $order->update_meta_data('_x402_payment_requirements', wp_json_encode($payload['response']));
+        $order->save();
+
+        return rest_ensure_response(
+            array(
+                'response' => $payload['response'],
+                'encoded'  => $payload['encoded'],
+            )
+        );
     }
 }
