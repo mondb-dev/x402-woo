@@ -72,6 +72,20 @@ class X402_Solana_Paywall {
             require_once $vendor_autoload;
         }
 
+        // Load new utility classes first
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-logger.php';
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-crypto-validator.php';
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-security-handler.php';
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-installer.php';
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-token-handler.php';
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-ajax-handler.php';
+        
+        // Load template system
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-template-handler.php';
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-template-functions.php';
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-shortcodes.php';
+        
+        // Load existing classes
         require_once X402_PLUGIN_DIR . 'includes/class-x402-database.php';
         require_once X402_PLUGIN_DIR . 'includes/class-x402-security.php';
         require_once X402_PLUGIN_DIR . 'includes/class-x402-payment.php';
@@ -98,6 +112,25 @@ class X402_Solana_Paywall {
         // Enqueue scripts and styles
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        
+        // Scheduled tasks
+        add_action('x402_cleanup_expired_requirements', array($this, 'cleanup_expired_requirements'));
+        add_action('x402_cleanup_old_logs', array($this, 'cleanup_old_logs'));
+    }
+
+    /**
+     * Cleanup expired payment requirements (cron job).
+     */
+    public function cleanup_expired_requirements() {
+        $deleted = X402_Installer::cleanup_expired_requirements();
+        X402_Logger::debug('Cleaned up expired payment requirements', array('count' => $deleted));
+    }
+
+    /**
+     * Cleanup old log files (cron job).
+     */
+    public function cleanup_old_logs() {
+        X402_Logger::clear_old_logs(30);
     }
 
     /**
@@ -121,19 +154,37 @@ class X402_Solana_Paywall {
         // Create database tables
         X402_Database::create_tables();
         
+        // Install X402 tables
+        X402_Installer::install();
+        
         // Set default options
         $this->set_default_options();
         
+        // Schedule cleanup tasks
+        if (!wp_next_scheduled('x402_cleanup_expired_requirements')) {
+            wp_schedule_event(time(), 'daily', 'x402_cleanup_expired_requirements');
+        }
+        
+        if (!wp_next_scheduled('x402_cleanup_old_logs')) {
+            wp_schedule_event(time(), 'weekly', 'x402_cleanup_old_logs');
+        }
+        
         // Flush rewrite rules
         flush_rewrite_rules();
-    }
-    
-    /**
+        
+        X402_Logger::info('X402 plugin activated');
+    }    /**
      * Plugin deactivation
      */
     public function deactivate() {
+        // Clear scheduled tasks
+        wp_clear_scheduled_hook('x402_cleanup_expired_requirements');
+        wp_clear_scheduled_hook('x402_cleanup_old_logs');
+        
         // Flush rewrite rules
         flush_rewrite_rules();
+        
+        X402_Logger::info('X402 plugin deactivated');
     }
     
     /**
@@ -207,7 +258,9 @@ class X402_Solana_Paywall {
             'x402_ajax',
             array(
                 'ajax_url' => admin_url('admin-ajax.php'),
-                'nonce'    => wp_create_nonce('x402_payment_nonce'),
+                'verify_nonce' => X402_Security_Handler::create_nonce(X402_Security_Handler::VERIFY_PAYMENT_ACTION),
+                'status_nonce' => X402_Security_Handler::create_nonce(X402_Security_Handler::CHECK_STATUS_ACTION),
+                'price_nonce' => wp_create_nonce('x402_get_price'),
                 'post_id'  => get_the_ID(),
                 'messages' => array(
                     'wallet_required'    => esc_html__( 'Please enter your wallet address.', 'x402-solana-paywall' ),

@@ -1,0 +1,368 @@
+/* X402 Template Styles - Theme Agnostic */
+
+/* Container Styles */
+.x402-paywall-container,
+.x402-success-container,
+.x402-error-container {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.x402-paywall-wrapper,
+.x402-success-wrapper,
+.x402-error-wrapper {
+    background: var(--x402-bg-color, #ffffff);
+    border: 1px solid var(--x402-border-color, #e0e0e0);
+    border-radius: var(--x402-border-radius, 8px);
+    padding: var(--x402-padding, 2rem);
+    box-shadow: var(--x402-box-shadow, 0 2px 8px rgba(0, 0, 0, 0.1));
+}
+
+/* Typography */
+.x402-paywall-wrapper h1,
+.x402-success-wrapper h1,
+.x402-error-wrapper h1 {
+    color: var(--x402-heading-color, #1a1a1a);
+    font-size: var(--x402-h1-size, 2rem);
+    margin-bottom: 1rem;
+}
+
+.x402-paywall-wrapper h2,
+.x402-success-wrapper h2,
+.x402-error-wrapper h2 {
+    color: var(--x402-heading-color, #1a1a1a);
+    font-size: var(--x402-h2-size, 1.5rem);
+    margin-bottom: 0.75rem;
+}
+
+.x402-paywall-wrapper p,
+.x402-success-wrapper p,
+.x402-error-wrapper p {
+    color: var(--x402-text-color, #4a4a4a);
+    font-size: var(--x402-text-size, 1rem);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+/* Payment Form */
+.x402-payment-form {
+    margin: 2rem 0;
+}
+
+.x402-payment-amount {
+    background: var(--x402-highlight-bg, #f8f9fa);
+    border: 1px solid var(--x402-border-color, #e0e0e0);
+    border-radius: var(--x402-border-radius, 8px);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.x402-payment-amount .amount-value {
+    font-size: var(--x402-amount-size, 2.5rem);
+    font-weight: bold;
+    color: var(--x402-primary-color, #4f46e5);
+}
+
+.x402-payment-amount .amount-label {
+    font-size: var(--x402-text-size, 1rem);
+    color: var(--x402-text-muted, #6b7280);
+    margin-top: 0.5rem;
+}
+
+.x402-payment-wallet {
+    background: var(--x402-highlight-bg, #f8f9fa);
+    border: 1px solid var(--x402-border-color, #e0e0e0);
+    border-radius: var(--x402-border-radius, 8px);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.x402-wallet-address {
+    font-family: monospace;
+    background: var(--x402-code-bg, #000000);
+    color: var(--x402-code-color, #ffffff);
+    padding: 0.75rem;
+    border-radius: 4px;
+    word-break: break-all;
+    margin: 1rem 0;
+}
+
+.x402-wallet-qr {
+    text-align: center;
+    margin: 1rem 0;
+}
+
+.x402-wallet-qr img {
+    max-width: 250px;
+    height: auto;
+}
+
+/* Payment Actions */
+.x402-payment-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+/* Buttons */
+.x402-button {
+    display: inline-block;
+    padding: var(--x402-button-padding, 0.75rem 1.5rem);
+    font-size: var(--x402-button-size, 1rem);
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    border: none;
+    border-radius: var(--x402-button-radius, 6px);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.x402-button-primary {
+    background: var(--x402-primary-color, #4f46e5);
+    color: var(--x402-button-text, #ffffff);
+}
+
+.x402-button-primary:hover {
+    background: var(--x402-primary-hover, #4338ca);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.x402-button-secondary {
+    background: var(--x402-secondary-color, #6b7280);
+    color: var(--x402-button-text, #ffffff);
+}
+
+.x402-button-secondary:hover {
+    background: var(--x402-secondary-hover, #4b5563);
+}
+
+.x402-button-outline {
+    background: transparent;
+    border: 2px solid var(--x402-primary-color, #4f46e5);
+    color: var(--x402-primary-color, #4f46e5);
+}
+
+.x402-button-outline:hover {
+    background: var(--x402-primary-color, #4f46e5);
+    color: var(--x402-button-text, #ffffff);
+}
+
+.x402-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Success Styles */
+.x402-success-icon,
+.x402-error-icon {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.x402-success-icon svg,
+.x402-error-icon svg {
+    width: 64px;
+    height: 64px;
+}
+
+.x402-success-title {
+    color: var(--x402-success-color, #10b981);
+    text-align: center;
+}
+
+.x402-success-text {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.x402-transaction-info {
+    background: var(--x402-highlight-bg, #f8f9fa);
+    border: 1px solid var(--x402-border-color, #e0e0e0);
+    border-radius: var(--x402-border-radius, 8px);
+    padding: 1rem;
+    margin: 1.5rem 0;
+}
+
+.x402-transaction-label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.x402-transaction-id code {
+    font-family: monospace;
+    font-size: 0.875rem;
+    word-break: break-all;
+}
+
+.x402-access-actions {
+    text-align: center;
+    margin-top: 2rem;
+}
+
+/* Error Styles */
+.x402-error-title {
+    color: var(--x402-error-color, #ef4444);
+    text-align: center;
+}
+
+.x402-error-text {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.x402-error-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 2rem 0;
+}
+
+.x402-error-help {
+    background: var(--x402-highlight-bg, #f8f9fa);
+    border-left: 4px solid var(--x402-warning-color, #f59e0b);
+    padding: 1rem;
+    margin-top: 2rem;
+}
+
+.x402-error-help h3 {
+    font-size: 1.125rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Status Display */
+.x402-payment-status {
+    text-align: center;
+    padding: 1.5rem;
+    background: var(--x402-highlight-bg, #f8f9fa);
+    border-radius: var(--x402-border-radius, 8px);
+    margin: 1rem 0;
+}
+
+.x402-status-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--x402-border-color, #e0e0e0);
+    border-top-color: var(--x402-primary-color, #4f46e5);
+    border-radius: 50%;
+    animation: x402-spin 1s linear infinite;
+}
+
+@keyframes x402-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.x402-status-message {
+    margin-top: 1rem;
+    font-weight: 500;
+}
+
+/* Token Selector */
+.x402-token-selector {
+    margin: 1rem 0;
+}
+
+.x402-token-selector select {
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 1rem;
+    border: 1px solid var(--x402-border-color, #e0e0e0);
+    border-radius: var(--x402-border-radius, 8px);
+    background: var(--x402-bg-color, #ffffff);
+    cursor: pointer;
+}
+
+.x402-token-info {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: var(--x402-info-bg, #eff6ff);
+    border-left: 4px solid var(--x402-info-color, #3b82f6);
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+/* Network Badge */
+.x402-network-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 12px;
+    background: var(--x402-badge-bg, #e0e7ff);
+    color: var(--x402-badge-color, #4f46e5);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .x402-paywall-wrapper,
+    .x402-success-wrapper,
+    .x402-error-wrapper {
+        padding: 1.5rem;
+    }
+
+    .x402-payment-amount .amount-value {
+        font-size: 2rem;
+    }
+
+    .x402-button {
+        width: 100%;
+    }
+
+    .x402-error-actions {
+        flex-direction: column;
+    }
+
+    .x402-error-actions .x402-button {
+        width: 100%;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --x402-bg-color: #1f2937;
+        --x402-border-color: #374151;
+        --x402-heading-color: #f9fafb;
+        --x402-text-color: #d1d5db;
+        --x402-text-muted: #9ca3af;
+        --x402-highlight-bg: #111827;
+        --x402-code-bg: #000000;
+        --x402-code-color: #ffffff;
+    }
+}
+
+/* Accessibility */
+.x402-button:focus,
+.x402-token-selector select:focus {
+    outline: 2px solid var(--x402-primary-color, #4f46e5);
+    outline-offset: 2px;
+}
+
+.x402-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Print Styles */
+@media print {
+    .x402-payment-actions,
+    .x402-access-actions,
+    .x402-error-actions {
+        display: none;
+    }
+}

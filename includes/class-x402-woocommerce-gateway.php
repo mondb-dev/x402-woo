@@ -41,6 +41,68 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
 
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
             add_action('woocommerce_order_details_after_order_table', array($this, 'render_order_payment_details'), 20, 1);
+            
+            // Admin validation
+            add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'validate_admin_options'));
+        }
+
+        /**
+         * Validate admin options before saving.
+         */
+        public function validate_admin_options() {
+            $pay_to = $this->get_option('pay_to');
+            $asset = $this->get_option('asset');
+            $network = $this->get_option('network');
+            $facilitator_endpoint = $this->get_option('facilitator_endpoint');
+
+            // Validate pay_to address
+            if (!empty($pay_to) && !X402_Crypto_Validator::validate_solana_address($pay_to) && !X402_Crypto_Validator::validate_eth_address($pay_to)) {
+                WC_Admin_Settings::add_error(__('Invalid pay-to address format.', 'x402-solana-paywall'));
+            }
+
+            // Validate asset address
+            if (!empty($asset) && !X402_Crypto_Validator::validate_solana_address($asset) && !X402_Crypto_Validator::validate_eth_address($asset)) {
+                WC_Admin_Settings::add_error(__('Invalid asset address format.', 'x402-solana-paywall'));
+            }
+
+            // Validate facilitator URL
+            if (!empty($facilitator_endpoint) && !X402_Crypto_Validator::validate_facilitator_url($facilitator_endpoint)) {
+                WC_Admin_Settings::add_error(__('Invalid facilitator URL. Must use HTTPS (except for localhost).', 'x402-solana-paywall'));
+            }
+
+            // Validate custom token if enabled
+            $use_custom = $this->get_option('use_custom_token');
+            if ($use_custom === 'yes') {
+                $custom_ca = $this->get_option('custom_token_ca');
+                $custom_symbol = $this->get_option('custom_token_symbol');
+                $custom_decimals = $this->get_option('custom_token_decimals');
+                
+                if (empty($custom_ca)) {
+                    WC_Admin_Settings::add_error(__('Custom token contract address (CA) is required when custom token is enabled.', 'x402-solana-paywall'));
+                }
+                
+                if (empty($custom_symbol)) {
+                    WC_Admin_Settings::add_error(__('Custom token symbol is required.', 'x402-solana-paywall'));
+                }
+                
+                if (empty($custom_decimals) || $custom_decimals < 0 || $custom_decimals > 18) {
+                    WC_Admin_Settings::add_error(__('Custom token decimals must be between 0 and 18.', 'x402-solana-paywall'));
+                }
+                
+                // Validate CA format
+                $is_valid_ca = X402_Crypto_Validator::validate_eth_address($custom_ca) || 
+                               X402_Crypto_Validator::validate_solana_address($custom_ca);
+                
+                if (!$is_valid_ca) {
+                    WC_Admin_Settings::add_error(__('Invalid contract address format. Must be a valid Ethereum (0x...) or Solana (base58) address.', 'x402-solana-paywall'));
+                }
+            }
+
+            X402_Logger::info('Gateway settings validated', array(
+                'network' => $network,
+                'facilitator_mode' => $this->get_option('facilitator_mode'),
+                'use_custom_token' => $use_custom,
+            ));
         }
 
         /**
@@ -127,18 +189,34 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
                     'title'       => __('Facilitator', 'x402-solana-paywall'),
                     'type'        => 'select',
                     'description' => __('Choose how payments are verified and settled.', 'x402-solana-paywall'),
-                    'default'     => 'none',
+                    'default'     => 'base',
                     'options'     => array(
-                        'none'     => __('No facilitator (manual verification)', 'x402-solana-paywall'),
+                        'base'     => __('Base Facilitator (Recommended)', 'x402-solana-paywall'),
                         'coinbase' => __('Coinbase Facilitator', 'x402-solana-paywall'),
                         'custom'   => __('Custom Facilitator', 'x402-solana-paywall'),
+                        'none'     => __('No facilitator (manual verification)', 'x402-solana-paywall'),
                     ),
                 ),
                 'facilitator_endpoint' => array(
-                    'title'       => __('Custom Facilitator Endpoint', 'x402-solana-paywall'),
+                    'title'       => __('Facilitator Endpoint URL', 'x402-solana-paywall'),
                     'type'        => 'text',
-                    'description' => __('Base URL of your self-hosted facilitator (required when using Custom Facilitator).', 'x402-solana-paywall'),
-                    'default'     => '',
+                    'description' => __('Facilitator service URL. Defaults to Base facilitator. Required when using Custom Facilitator.', 'x402-solana-paywall'),
+                    'default'     => 'https://facilitator.base.org',
+                    'placeholder' => 'https://facilitator.base.org',
+                    'custom_attributes' => array(
+                        'pattern' => 'https?://.+',
+                    ),
+                ),
+                'facilitator_timeout' => array(
+                    'title'       => __('Facilitator Request Timeout', 'x402-solana-paywall'),
+                    'type'        => 'number',
+                    'description' => __('Maximum time in seconds to wait for facilitator response.', 'x402-solana-paywall'),
+                    'default'     => 30,
+                    'custom_attributes' => array(
+                        'min' => 5,
+                        'max' => 120,
+                        'step' => 1,
+                    ),
                 ),
                 'facilitator_api_key' => array(
                     'title'       => __('Facilitator API Key', 'x402-solana-paywall'),
@@ -152,7 +230,281 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
                     'label'       => __('Attempt to automatically settle payments after verification.', 'x402-solana-paywall'),
                     'default'     => 'yes',
                 ),
+                'token_settings_section' => array(
+                    'title'       => __('Token Settings', 'x402-solana-paywall'),
+                    'type'        => 'title',
+                    'description' => __('Configure accepted tokens and currencies for payments.', 'x402-solana-paywall'),
+                ),
+                'enable_spl_tokens' => array(
+                    'title'       => __('Enable SPL Tokens', 'x402-solana-paywall'),
+                    'type'        => 'checkbox',
+                    'label'       => __('Accept Solana SPL token payments (USDC, TROLL, BONK, etc.)', 'x402-solana-paywall'),
+                    'default'     => 'yes',
+                ),
+                'enable_erc20_tokens' => array(
+                    'title'       => __('Enable ERC-20 Tokens', 'x402-solana-paywall'),
+                    'type'        => 'checkbox',
+                    'label'       => __('Accept ERC-20 token payments (USDC, USDT, DAI, etc.)', 'x402-solana-paywall'),
+                    'default'     => 'yes',
+                ),
+                'accepted_tokens' => array(
+                    'title'       => __('Accepted Tokens', 'x402-solana-paywall'),
+                    'type'        => 'multiselect',
+                    'description' => __('Select which tokens customers can use for payment. Leave empty to accept all.', 'x402-solana-paywall'),
+                    'default'     => array(),
+                    'options'     => $this->get_token_options(),
+                    'desc_tip'    => true,
+                    'class'       => 'wc-enhanced-select',
+                ),
+                'default_token' => array(
+                    'title'       => __('Default Token', 'x402-solana-paywall'),
+                    'type'        => 'select',
+                    'description' => __('Pre-selected token at checkout.', 'x402-solana-paywall'),
+                    'default'     => 'USDC_solana-mainnet',
+                    'options'     => $this->get_token_options(),
+                    'desc_tip'    => true,
+                ),
+                'enable_price_conversion' => array(
+                    'title'       => __('Enable Price Conversion', 'x402-solana-paywall'),
+                    'type'        => 'checkbox',
+                    'label'       => __('Automatically convert order total to token amount using real-time prices', 'x402-solana-paywall'),
+                    'default'     => 'yes',
+                ),
+                'custom_token_section' => array(
+                    'title'       => __('Custom Token (Advanced)', 'x402-solana-paywall'),
+                    'type'        => 'title',
+                    'description' => __('Configure a custom token by entering its contract address (CA) or mint address. This overrides the selected tokens above.', 'x402-solana-paywall'),
+                ),
+                'use_custom_token' => array(
+                    'title'       => __('Use Custom Token', 'x402-solana-paywall'),
+                    'type'        => 'checkbox',
+                    'label'       => __('Enable custom token payment (ignores token selection above)', 'x402-solana-paywall'),
+                    'default'     => 'no',
+                    'description' => __('When enabled, only the custom token below will be accepted for payment.', 'x402-solana-paywall'),
+                    'desc_tip'    => true,
+                ),
+                'custom_token_ca' => array(
+                    'title'       => __('Token Contract Address (CA)', 'x402-solana-paywall'),
+                    'type'        => 'text',
+                    'description' => __('Enter the token contract address (ERC-20) or mint address (SPL token). Examples: Ethereum: 0x..., Solana: base58 address', 'x402-solana-paywall'),
+                    'default'     => '',
+                    'placeholder' => __('0x... or base58 mint address', 'x402-solana-paywall'),
+                    'desc_tip'    => true,
+                    'custom_attributes' => array(
+                        'data-depends-on' => 'use_custom_token',
+                    ),
+                ),
+                'custom_token_symbol' => array(
+                    'title'       => __('Token Symbol', 'x402-solana-paywall'),
+                    'type'        => 'text',
+                    'description' => __('Token symbol (e.g., TROLL, BONK, PEPE)', 'x402-solana-paywall'),
+                    'default'     => '',
+                    'placeholder' => __('e.g., TROLL', 'x402-solana-paywall'),
+                    'desc_tip'    => true,
+                ),
+                'custom_token_name' => array(
+                    'title'       => __('Token Name', 'x402-solana-paywall'),
+                    'type'        => 'text',
+                    'description' => __('Full token name (e.g., Troll Token)', 'x402-solana-paywall'),
+                    'default'     => '',
+                    'placeholder' => __('e.g., Troll Token', 'x402-solana-paywall'),
+                    'desc_tip'    => true,
+                ),
+                'custom_token_decimals' => array(
+                    'title'       => __('Token Decimals', 'x402-solana-paywall'),
+                    'type'        => 'number',
+                    'description' => __('Number of decimal places (usually 6, 9, or 18)', 'x402-solana-paywall'),
+                    'default'     => '6',
+                    'placeholder' => '6',
+                    'desc_tip'    => true,
+                    'custom_attributes' => array(
+                        'min' => 0,
+                        'max' => 18,
+                        'step' => 1,
+                    ),
+                ),
+                'custom_token_price' => array(
+                    'title'       => __('Token Price (USD)', 'x402-solana-paywall'),
+                    'type'        => 'text',
+                    'description' => __('Current token price in USD. Leave empty to fetch automatically. Update this regularly for accurate pricing.', 'x402-solana-paywall'),
+                    'default'     => '',
+                    'placeholder' => __('e.g., 0.000123', 'x402-solana-paywall'),
+                    'desc_tip'    => true,
+                ),
+                'custom_token_coingecko_id' => array(
+                    'title'       => __('CoinGecko ID (Optional)', 'x402-solana-paywall'),
+                    'type'        => 'text',
+                    'description' => __('CoinGecko token ID for automatic price fetching (e.g., "troll", "bonk"). Find it on CoinGecko URL.', 'x402-solana-paywall'),
+                    'default'     => '',
+                    'placeholder' => __('e.g., troll', 'x402-solana-paywall'),
+                    'desc_tip'    => true,
+                ),
             );
+        }
+
+        /**
+         * Get token options for settings dropdown
+         *
+         * @return array
+         */
+        private function get_token_options() {
+            $options = array();
+            $tokens = X402_Token_Handler::get_supported_tokens('all');
+            
+            foreach ($tokens as $key => $token) {
+                $symbol = $token['token_symbol'] ?? $token['symbol'];
+                $network = $token['network'];
+                $network_label = $this->get_network_label($network);
+                
+                $label = sprintf(
+                    '%s (%s on %s)',
+                    $token['name'],
+                    $symbol,
+                    $network_label
+                );
+                
+                if (isset($token['custom']) && $token['custom']) {
+                    $label .= ' [Custom]';
+                }
+                
+                $options[$key] = $label;
+            }
+            
+            return $options;
+        }
+
+        /**
+         * Get human-readable network label
+         *
+         * @param string $network Network identifier.
+         * @return string
+         */
+        private function get_network_label($network) {
+            $labels = array(
+                'solana' => 'Solana',
+                'solana-mainnet' => 'Solana',
+                'solana-devnet' => 'Solana Devnet',
+                'solana-testnet' => 'Solana Testnet',
+                'ethereum-mainnet' => 'Ethereum',
+                'ethereum-sepolia' => 'Ethereum Sepolia',
+                'base-mainnet' => 'Base',
+                'base-sepolia' => 'Base Sepolia',
+                'polygon-mainnet' => 'Polygon',
+                'polygon-amoy' => 'Polygon Amoy',
+            );
+            
+            return isset($labels[$network]) ? $labels[$network] : ucfirst($network);
+        }
+
+        /**
+         * Get active token information (custom or selected)
+         *
+         * @return array|null Token information or null.
+         */
+        public function get_active_token() {
+            // Check if custom token is enabled
+            if ($this->get_option('use_custom_token') === 'yes') {
+                return $this->get_custom_token_info();
+            }
+            
+            // Return default token from selection
+            $default_token = $this->get_option('default_token', 'USDC_solana-mainnet');
+            
+            if (empty($default_token)) {
+                return null;
+            }
+            
+            $parts = explode('_', $default_token);
+            if (count($parts) < 2) {
+                return null;
+            }
+            
+            $symbol = $parts[0];
+            $network = implode('_', array_slice($parts, 1));
+            
+            return X402_Token_Handler::get_token_info($symbol, $network);
+        }
+
+        /**
+         * Get custom token information from settings
+         *
+         * @return array|null
+         */
+        private function get_custom_token_info() {
+            $ca = $this->get_option('custom_token_ca');
+            $symbol = $this->get_option('custom_token_symbol');
+            $name = $this->get_option('custom_token_name');
+            $decimals = $this->get_option('custom_token_decimals', 6);
+            $price = $this->get_option('custom_token_price');
+            $coingecko_id = $this->get_option('custom_token_coingecko_id');
+            
+            if (empty($ca) || empty($symbol)) {
+                return null;
+            }
+            
+            // Detect network based on address format
+            $network = $this->get_option('network', 'solana-mainnet');
+            if (X402_Crypto_Validator::validate_eth_address($ca)) {
+                // EVM address
+                $network_type = X402_Crypto_Validator::get_network_type($network);
+                if ($network_type !== 'evm') {
+                    $network = 'ethereum-mainnet'; // Default to Ethereum if not set
+                }
+            } elseif (X402_Crypto_Validator::validate_solana_address($ca)) {
+                // Solana address
+                if (strpos($network, 'solana') === false) {
+                    $network = 'solana-mainnet';
+                }
+            }
+            
+            $token_info = array(
+                'address' => $ca,
+                'mint' => $ca, // For Solana compatibility
+                'symbol' => strtoupper($symbol),
+                'name' => $name ?: $symbol,
+                'decimals' => (int) $decimals,
+                'network' => $network,
+                'custom' => true,
+                'manual_price' => !empty($price) ? (float) $price : false,
+            );
+            
+            if (!empty($coingecko_id)) {
+                $token_info['coingecko_id'] = $coingecko_id;
+            }
+            
+            return $token_info;
+        }
+
+        /**
+         * Get token price (custom or from handler)
+         *
+         * @param array $token_info Token information.
+         * @return float|false
+         */
+        private function get_token_price_for_payment($token_info) {
+            // Check if manual price is set
+            if (isset($token_info['manual_price']) && $token_info['manual_price'] !== false) {
+                return $token_info['manual_price'];
+            }
+            
+            // Fetch from price oracle
+            if (isset($token_info['coingecko_id'])) {
+                $price = X402_Token_Handler::get_token_price($token_info['symbol'], $token_info['network']);
+                if ($price !== false) {
+                    return $price;
+                }
+            }
+            
+            // For custom tokens without coingecko_id, require manual price
+            if (isset($token_info['custom']) && $token_info['custom']) {
+                X402_Logger::warning('Custom token has no price configured', array(
+                    'symbol' => $token_info['symbol'],
+                    'ca' => $token_info['address'] ?? $token_info['mint'],
+                ));
+                return false;
+            }
+            
+            return X402_Token_Handler::get_token_price($token_info['symbol'], $token_info['network']);
         }
 
         /**
@@ -162,33 +514,87 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
          * @return array
          */
         public function process_payment($order_id) {
-            $order = wc_get_order($order_id);
-
-            if (!$order instanceof WC_Order) {
+            // Validate order ID
+            $order_id = X402_Security_Handler::validate_order_id($order_id);
+            if (!$order_id) {
+                X402_Logger::error('Invalid order ID provided', array('order_id' => $order_id));
                 wc_add_notice(__('Unable to locate the order for x402 payment processing.', 'x402-solana-paywall'), 'error');
                 return array('result' => 'failure');
             }
 
+            $order = wc_get_order($order_id);
+
+            if (!$order instanceof WC_Order) {
+                X402_Logger::error('Order not found', array('order_id' => $order_id));
+                wc_add_notice(__('Unable to locate the order for x402 payment processing.', 'x402-solana-paywall'), 'error');
+                return array('result' => 'failure');
+            }
+
+            // Rate limiting
+            if (!X402_Security_Handler::check_rate_limit('process_payment_' . $order_id, 5, 60)) {
+                X402_Logger::warning('Rate limit exceeded for order', array('order_id' => $order_id));
+                wc_add_notice(__('Too many payment attempts. Please try again later.', 'x402-solana-paywall'), 'error');
+                return array('result' => 'failure');
+            }
+
             try {
+                X402_Logger::info('Processing payment', array('order_id' => $order_id));
+                
                 $handler      = $this->build_payment_handler();
                 $requirements = $this->create_payment_requirements($order, $handler);
                 $headers      = $this->collect_request_headers();
 
+                // Validate payment headers
+                $headers = X402_Crypto_Validator::sanitize_payment_headers($headers);
+
                 $result = $handler->processPayment($headers, $requirements);
 
                 if (!$result['verified']) {
+                    X402_Logger::log_payment_verification($order_id, false, 'Payment not verified by handler');
                     $this->store_payment_requirements($order, $requirements, $handler);
                     return array('result' => 'failure');
+                }
+
+                X402_Logger::log_payment_verification($order_id, true);
+
+                // Store transaction data
+                if (isset($result['payload']) && $result['payload'] !== null) {
+                    $payload = $result['payload'];
+                    $payload_array = $payload->toArray();
+                    
+                    // Extract transaction details
+                    $tx_hash = $payload_array['signature'] ?? '';
+                    $wallet_address = $payload_array['from'] ?? '';
+                    
+                    if (!empty($tx_hash)) {
+                        // Validate transaction hash
+                        $network = $this->get_option('network', 'solana-devnet');
+                        if (X402_Crypto_Validator::validate_tx_hash($tx_hash, $network)) {
+                            X402_Installer::insert_transaction(array(
+                                'order_id' => $order_id,
+                                'tx_hash' => $tx_hash,
+                                'wallet_address' => $wallet_address,
+                                'amount' => $requirements->amount,
+                                'asset' => $requirements->asset,
+                                'network' => $requirements->network,
+                                'status' => 'completed',
+                                'facilitator_url' => $this->get_facilitator_endpoint(),
+                                'verification_method' => $this->get_option('facilitator_mode', 'base'),
+                                'settled' => !empty($result['settlement']) ? 1 : 0,
+                                'metadata' => $payload_array,
+                            ));
+                            
+                            X402_Logger::log_transaction($order_id, $tx_hash, $payload_array);
+                        }
+                    }
+                    
+                    $order->update_meta_data('_x402_payment_payload', wp_json_encode($payload_array));
                 }
 
                 if (!empty($result['settlement'])) {
                     $settlement_header = $handler->createPaymentResponseHeader($result['settlement']);
                     $order->update_meta_data('_x402_payment_response', $settlement_header);
-                }
-
-                $payload = $result['payload'];
-                if ($payload !== null) {
-                    $order->update_meta_data('_x402_payment_payload', wp_json_encode($payload->toArray()));
+                    $order->update_meta_data('_x402_settlement_complete', true);
                 }
 
                 $order->payment_complete();
@@ -199,12 +605,17 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
                     WC()->cart->empty_cart();
                 }
 
+                X402_Logger::info('Payment completed successfully', array('order_id' => $order_id));
+
                 return array(
                     'result'   => 'success',
                     'redirect' => $this->get_return_url($order),
                 );
             } catch (PaymentRequiredException $exception) {
-                $this->log_error($exception->getMessage());
+                X402_Logger::error('Payment required exception', array(
+                    'order_id' => $order_id,
+                    'message' => $exception->getMessage(),
+                ));
                 wc_add_notice(
                     sprintf(
                         __('Payment verification failed: %s', 'x402-solana-paywall'),
@@ -213,7 +624,10 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
                     'error'
                 );
             } catch (ValidationException $exception) {
-                $this->log_error($exception->getMessage());
+                X402_Logger::error('Validation exception', array(
+                    'order_id' => $order_id,
+                    'message' => $exception->getMessage(),
+                ));
                 wc_add_notice(
                     sprintf(
                         __('Invalid payment configuration: %s', 'x402-solana-paywall'),
@@ -222,7 +636,11 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
                     'error'
                 );
             } catch (Exception $exception) {
-                $this->log_error($exception->getMessage());
+                X402_Logger::critical('Unexpected exception', array(
+                    'order_id' => $order_id,
+                    'message' => $exception->getMessage(),
+                    'trace' => $exception->getTraceAsString(),
+                ));
                 wc_add_notice(
                     sprintf(
                         __('Unexpected error while processing x402 payment: %s', 'x402-solana-paywall'),
@@ -253,7 +671,13 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
          * @return FacilitatorClient|null
          */
         private function maybe_create_facilitator() {
-            $mode = $this->get_option('facilitator_mode', 'none');
+            $mode = $this->get_option('facilitator_mode', 'base');
+
+            if ('base' === $mode) {
+                $endpoint = $this->get_facilitator_endpoint();
+                $api_key = $this->get_option('facilitator_api_key');
+                return FacilitatorClient::selfHosted($endpoint, $api_key ? (string) $api_key : null);
+            }
 
             if ('coinbase' === $mode) {
                 $api_key = $this->get_option('facilitator_api_key');
@@ -275,6 +699,21 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
         }
 
         /**
+         * Get facilitator endpoint URL with validation.
+         *
+         * @return string
+         */
+        private function get_facilitator_endpoint() {
+            $endpoint = trim((string) $this->get_option('facilitator_endpoint', 'https://facilitator.base.org'));
+            
+            if ('' === $endpoint) {
+                return 'https://facilitator.base.org';
+            }
+
+            return esc_url_raw($endpoint, array('http', 'https'));
+        }
+
+        /**
          * Create payment requirements for the WooCommerce order.
          *
          * @param WC_Order $order WooCommerce order instance.
@@ -291,6 +730,21 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
 
             if (!Validator::isValidNetwork($network)) {
                 throw new ValidationException(__('The configured x402 network is not supported.', 'x402-solana-paywall'));
+            }
+
+            // Additional crypto validation
+            $network_type = X402_Crypto_Validator::get_network_type($network);
+            
+            if ($network_type === 'solana' && !X402_Crypto_Validator::validate_solana_address($pay_to)) {
+                throw new ValidationException(__('The configured pay-to address is not a valid Solana address.', 'x402-solana-paywall'));
+            } elseif ($network_type === 'evm' && !X402_Crypto_Validator::validate_eth_address($pay_to)) {
+                throw new ValidationException(__('The configured pay-to address is not a valid EVM address.', 'x402-solana-paywall'));
+            }
+            
+            if ($network_type === 'solana' && !X402_Crypto_Validator::validate_solana_address($asset)) {
+                throw new ValidationException(__('The configured asset address is not a valid Solana address.', 'x402-solana-paywall'));
+            } elseif ($network_type === 'evm' && !X402_Crypto_Validator::validate_eth_address($asset)) {
+                throw new ValidationException(__('The configured asset address is not a valid EVM address.', 'x402-solana-paywall'));
             }
 
             if (!Validator::isValidAddress($pay_to, $network)) {
@@ -430,6 +884,115 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
                 ),
                 'notice'
             );
+        }
+
+        /**
+         * Display payment form on checkout page.
+         */
+        public function payment_fields() {
+            if ($this->description) {
+                echo wpautop(wptautokses_post($this->description));
+            }
+            
+            // Display custom token info if enabled
+            if ($this->get_option('use_custom_token') === 'yes') {
+                $token_info = $this->get_custom_token_info();
+                if ($token_info) {
+                    $this->render_custom_token_payment_form($token_info);
+                }
+            } else {
+                $this->render_standard_payment_form();
+            }
+        }
+
+        /**
+         * Render custom token payment form.
+         *
+         * @param array $token_info Token information.
+         */
+        private function render_custom_token_payment_form($token_info) {
+            echo '<div class="x402-payment-form x402-custom-token">';
+            
+            echo '<div class="x402-token-info" style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 10px 0;">';
+            echo '<h4 style="margin-top: 0;">Payment Token: ' . esc_html($token_info['name']) . ' (' . esc_html($token_info['symbol']) . ')</h4>';
+            
+            if (isset($token_info['address']) || isset($token_info['mint'])) {
+                $address = $token_info['address'] ?? $token_info['mint'];
+                echo '<p><strong>Contract Address (CA):</strong><br>';
+                echo '<code style="background: #fff; padding: 5px 10px; display: inline-block; border-radius: 3px; font-size: 11px; word-break: break-all;">' . esc_html($address) . '</code>';
+                echo '</p>';
+            }
+            
+            echo '<p><strong>Network:</strong> ' . esc_html(ucfirst($token_info['network'])) . '</p>';
+            echo '<p><strong>Decimals:</strong> ' . esc_html($token_info['decimals']) . '</p>';
+            
+            if (isset($token_info['manual_price']) && $token_info['manual_price'] !== false) {
+                echo '<p><strong>Token Price:</strong> $' . esc_html(number_format($token_info['manual_price'], 6)) . ' USD</p>';
+            }
+            
+            echo '<p class="x402-token-amount" style="font-size: 16px; font-weight: bold; color: #2271b1;"></p>';
+            echo '</div>';
+            
+            // Hidden field to pass token selection
+            echo '<input type="hidden" name="x402_token" value="custom" />';
+            
+            echo '</div>';
+        }
+
+        /**
+         * Render standard token selection form.
+         */
+        private function render_standard_payment_form() {
+            $accepted_tokens = $this->get_option('accepted_tokens', array());
+            $default_token = $this->get_option('default_token', 'USDC_solana-mainnet');
+            
+            if (empty($accepted_tokens)) {
+                // If no specific tokens selected, show all
+                $accepted_tokens = array_keys($this->get_token_options());
+            }
+            
+            if (count($accepted_tokens) === 1) {
+                // Only one token, no need for selector
+                echo '<input type="hidden" name="x402_token" value="' . esc_attr($accepted_tokens[0]) . '" />';
+                
+                // Show token info
+                $parts = explode('_', $accepted_tokens[0]);
+                $symbol = $parts[0];
+                $network = implode('_', array_slice($parts, 1));
+                $token_info = X402_Token_Handler::get_token_info($symbol, $network);
+                
+                if ($token_info) {
+                    echo '<div class="x402-token-info" style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0;">';
+                    echo '<p><strong>Payment Token:</strong> ' . esc_html($token_info['name']) . ' (' . esc_html($token_info['symbol']) . ')</p>';
+                    echo '<p class="x402-token-amount"></p>';
+                    echo '</div>';
+                }
+            } else {
+                // Multiple tokens, show selector
+                echo '<div class="x402-payment-form">';
+                echo '<p class="form-row form-row-wide">';
+                echo '<label for="x402_token">' . esc_html__('Select Payment Token', 'x402-solana-paywall') . ' <span class="required">*</span></label>';
+                echo '<select id="x402_token_select" name="x402_token" class="select" required>';
+                
+                $token_options = $this->get_token_options();
+                foreach ($accepted_tokens as $token_key) {
+                    if (isset($token_options[$token_key])) {
+                        $selected = ($token_key === $default_token) ? ' selected' : '';
+                        echo '<option value="' . esc_attr($token_key) . '"' . $selected . '>' . esc_html($token_options[$token_key]) . '</option>';
+                    }
+                }
+                
+                echo '</select>';
+                echo '</p>';
+                
+                echo '<div class="x402-token-info" style="margin: 10px 0;">';
+                echo '<p class="x402-token-amount"></p>';
+                echo '<p class="x402-token-price" style="font-size: 12px; color: #666;"></p>';
+                echo '</div>';
+                
+                echo '<input type="hidden" name="order_total" id="order_total" value="" />';
+                echo '</div>';
+            }
         }
 
         /**

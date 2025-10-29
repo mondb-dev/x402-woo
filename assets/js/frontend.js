@@ -27,6 +27,270 @@
                 verifyPayment();
             }
         });
+        
+        // Token selection handler
+        $('#x402_token_select, select[name="x402_token"], .x402-token-select').on('change', function() {
+            updateTokenAmount();
+        });
+        
+        // Initialize token amount display
+        if ($('#x402_token_select, select[name="x402_token"], .x402-token-select').length) {
+            updateTokenAmount();
+        }
+
+        // Copy button handler
+        initCopyButtons();
+
+        // Connect wallet button handler
+        initWalletButtons();
+
+        // Manual verify button handler
+        initVerifyButtons();
+    }
+
+    /**
+     * Initialize copy buttons
+     */
+    function initCopyButtons() {
+        $('.x402-copy-button').on('click', function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            var copyTarget = $btn.data('copy-target');
+            var copyText = $btn.data('copy-text');
+            
+            var textToCopy = copyText || $(copyTarget).text();
+            
+            copyToClipboard(textToCopy);
+            
+            // Visual feedback
+            var originalText = $btn.text();
+            $btn.text('Copied!').addClass('copied');
+            
+            setTimeout(function() {
+                $btn.text(originalText).removeClass('copied');
+            }, 2000);
+        });
+    }
+
+    /**
+     * Initialize wallet connect buttons
+     */
+    function initWalletButtons() {
+        $('.x402-connect-wallet').on('click', function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            var postId = $btn.data('post-id');
+            
+            // Show loading state
+            showPaymentStatus('Connecting wallet...');
+            
+            // Trigger custom event for wallet integrations
+            $(document).trigger('x402:payment:initiated', { postId: postId });
+            
+            // Here you would integrate with actual wallet providers
+            connectWallet(postId);
+        });
+    }
+
+    /**
+     * Initialize verify buttons
+     */
+    function initVerifyButtons() {
+        $('.x402-verify-payment').on('click', function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            var postId = $btn.data('post-id');
+            
+            showPaymentStatus('Verifying payment...');
+            verifyManualPayment(postId);
+        });
+    }
+
+    /**
+     * Show payment status
+     */
+    function showPaymentStatus(message) {
+        var $status = $('.x402-payment-status');
+        if ($status.length) {
+            $status.find('.x402-status-message').text(message);
+            $status.fadeIn();
+        }
+    }
+
+    /**
+     * Hide payment status
+     */
+    function hidePaymentStatus() {
+        $('.x402-payment-status').fadeOut();
+    }
+
+    /**
+     * Copy text to clipboard
+     */
+    function copyToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text);
+        } else {
+            // Fallback for older browsers
+            var $temp = $('<textarea>');
+            $('body').append($temp);
+            $temp.val(text).select();
+            document.execCommand('copy');
+            $temp.remove();
+        }
+    }
+
+    /**
+     * Connect wallet (placeholder for wallet integration)
+     */
+    function connectWallet(postId) {
+        // This would integrate with Phantom, MetaMask, etc.
+        console.log('Connect wallet for post:', postId);
+        
+        // Placeholder - in real implementation, this would:
+        // 1. Detect available wallets
+        // 2. Request connection
+        // 3. Get wallet address
+        // 4. Initiate transaction
+        // 5. Wait for confirmation
+        // 6. Verify on backend
+        
+        setTimeout(function() {
+            hidePaymentStatus();
+            alert('Wallet integration coming soon. Please use manual payment verification.');
+        }, 1000);
+    }
+
+    /**
+     * Verify manual payment
+     */
+    function verifyManualPayment(postId) {
+        // Trigger AJAX verification
+        $.ajax({
+            url: x402_vars.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'x402_verify_payment',
+                nonce: x402_vars.payment_nonce,
+                post_id: postId
+            },
+            success: function(response) {
+                hidePaymentStatus();
+                if (response.success) {
+                    $(document).trigger('x402:payment:success', response.data);
+                    window.location.href = response.data.redirect_url;
+                } else {
+                    $(document).trigger('x402:payment:failed', { error: response.data.message });
+                    alert(response.data.message || 'Payment verification failed');
+                }
+            },
+            error: function() {
+                hidePaymentStatus();
+                alert('An error occurred. Please try again.');
+            }
+        });
+    }
+
+    /**
+     * Update token amount display based on order total
+     */
+    function updateTokenAmount() {
+        var $select = $('#x402_token_select, select[name="x402_token"]');
+        var selectedToken = $select.val();
+        var orderTotal = parseFloat($('input[name="order_total"]').val() || $('#order_total').text() || 0);
+        var $amountDisplay = $('.x402-token-amount');
+        var $priceDisplay = $('.x402-token-price');
+        
+        if (!selectedToken || !orderTotal) {
+            return;
+        }
+        
+        // Show loading state
+        if ($amountDisplay.length) {
+            $amountDisplay.html('<span class="x402-loading">Calculating...</span>');
+        }
+        
+        $.ajax({
+            url: x402_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'x402_get_token_amount',
+                _wpnonce: x402_ajax.price_nonce,
+                token: selectedToken,
+                amount: orderTotal
+            },
+            success: function(response) {
+                if (response.success) {
+                    var data = response.data;
+                    
+                    // Update amount display
+                    if ($amountDisplay.length) {
+                        $amountDisplay.html(
+                            '<strong>' + data.token_amount + ' ' + data.symbol + '</strong>'
+                        );
+                    }
+                    
+                    // Update price display
+                    if ($priceDisplay.length) {
+                        $priceDisplay.text('1 ' + data.symbol + ' ≈ $' + (orderTotal / parseFloat(data.token_amount)).toFixed(2));
+                    }
+                    
+                    // Update wallet address placeholder based on network
+                    var $walletInput = $('#x402-wallet-address, input[name="x402_wallet_address"]');
+                    if ($walletInput.length) {
+                        if (data.network.indexOf('solana') !== -1) {
+                            $walletInput.attr('placeholder', 'Solana wallet address (base58)');
+                        } else {
+                            $walletInput.attr('placeholder', 'EVM wallet address (0x...)');
+                        }
+                    }
+                    
+                    // Show token info for SPL tokens
+                    if (data.token_info && data.token_info.mint && data.token_info.mint !== 'native') {
+                        showTokenInfo(data.token_info);
+                    }
+                } else {
+                    if ($amountDisplay.length) {
+                        $amountDisplay.html('<span class="x402-error">Unable to calculate</span>');
+                    }
+                }
+            },
+            error: function() {
+                if ($amountDisplay.length) {
+                    $amountDisplay.html('<span class="x402-error">Error loading price</span>');
+                }
+            }
+        });
+    }
+
+    /**
+     * Show token information (for SPL tokens)
+     */
+    function showTokenInfo(tokenInfo) {
+        var $info = $('.x402-token-info');
+        
+        if (!$info.length) {
+            return;
+        }
+        
+        var html = '<div class="x402-token-details">';
+        
+        if (tokenInfo.mint && tokenInfo.mint !== 'native') {
+            html += '<div class="x402-mint-address">';
+            html += '<label>Token Mint:</label> ';
+            html += '<code>' + tokenInfo.mint.substring(0, 8) + '...' + tokenInfo.mint.substring(tokenInfo.mint.length - 8) + '</code>';
+            html += '</div>';
+        }
+        
+        if (tokenInfo.decimals) {
+            html += '<div class="x402-decimals">';
+            html += '<label>Decimals:</label> ' + tokenInfo.decimals;
+            html += '</div>';
+        }
+        
+        html += '</div>';
+        
+        $info.html(html).show();
     }
     
     /**

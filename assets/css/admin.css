@@ -49,6 +49,41 @@
     margin-bottom: 30px;
 }
 
+/* Custom token fields */
+.x402-custom-token-fields {
+    background: #f8f9fa;
+    padding: 15px;
+    border-left: 3px solid #2271b1;
+    margin-top: 10px;
+}
+
+.x402-custom-token-example {
+    background: #fff;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-top: 10px;
+    font-size: 12px;
+}
+
+.x402-custom-token-example code {
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.x402-token-ca-field {
+    font-family: monospace;
+}
+
+.x402-custom-token-hint {
+    color: #666;
+    font-style: italic;
+    font-size: 12px;
+    margin-top: 5px;
+}
+
 .x402-settings-section h2 {
     border-bottom: 1px solid #ccc;
     padding-bottom: 10px;
