@@ -11,7 +11,7 @@
  * Text Domain: x402-solana-paywall
  * Domain Path: /languages
  * Requires at least: 5.8
- * Requires PHP: 7.4
+ * Requires PHP: 8.1
  *
  * @package X402_Solana_Paywall
  */
@@ -66,12 +66,19 @@ class X402_Solana_Paywall {
      * Load required files
      */
     private function load_dependencies() {
+        $vendor_autoload = X402_PLUGIN_DIR . 'vendor/autoload.php';
+
+        if (file_exists($vendor_autoload)) {
+            require_once $vendor_autoload;
+        }
+
         require_once X402_PLUGIN_DIR . 'includes/class-x402-database.php';
         require_once X402_PLUGIN_DIR . 'includes/class-x402-security.php';
         require_once X402_PLUGIN_DIR . 'includes/class-x402-payment.php';
         require_once X402_PLUGIN_DIR . 'includes/class-x402-content-protection.php';
         require_once X402_PLUGIN_DIR . 'includes/class-x402-admin.php';
         require_once X402_PLUGIN_DIR . 'includes/class-x402-api.php';
+        require_once X402_PLUGIN_DIR . 'includes/class-x402-woocommerce-gateway.php';
     }
     
     /**
@@ -84,10 +91,27 @@ class X402_Solana_Paywall {
         
         // Initialize components
         add_action('plugins_loaded', array($this, 'init'));
+
+        // WooCommerce integration
+        add_filter('woocommerce_payment_gateways', array($this, 'register_woocommerce_gateway'));
         
         // Enqueue scripts and styles
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+    }
+
+    /**
+     * Register the x402 WooCommerce gateway when WooCommerce is active.
+     *
+     * @param array $gateways Existing gateways.
+     * @return array
+     */
+    public function register_woocommerce_gateway($gateways) {
+        if (class_exists('WC_Payment_Gateway') && class_exists('X402_WooCommerce_Gateway')) {
+            $gateways[] = 'X402_WooCommerce_Gateway';
+        }
+
+        return $gateways;
     }
     
     /**
