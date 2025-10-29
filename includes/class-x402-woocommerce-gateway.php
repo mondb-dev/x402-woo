@@ -41,68 +41,114 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
 
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
             add_action('woocommerce_order_details_after_order_table', array($this, 'render_order_payment_details'), 20, 1);
-            
-            // Admin validation
-            add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'validate_admin_options'));
         }
 
         /**
-         * Validate admin options before saving.
+         * Process and validate admin options before saving.
          */
-        public function validate_admin_options() {
-            $pay_to = $this->get_option('pay_to');
-            $asset = $this->get_option('asset');
-            $network = $this->get_option('network');
-            $facilitator_endpoint = $this->get_option('facilitator_endpoint');
+        public function process_admin_options() {
+            $post_data = $this->get_post_data();
+            $settings  = $this->collect_posted_settings($post_data);
+            $errors    = $this->validate_settings($settings);
 
-            // Validate pay_to address
-            if (!empty($pay_to) && !X402_Crypto_Validator::validate_solana_address($pay_to) && !X402_Crypto_Validator::validate_eth_address($pay_to)) {
-                WC_Admin_Settings::add_error(__('Invalid pay-to address format.', 'x402-solana-paywall'));
+            if (!empty($errors)) {
+                foreach ($errors as $message) {
+                    WC_Admin_Settings::add_error($message);
+                }
+
+                $this->display_errors();
+                return false;
             }
 
-            // Validate asset address
-            if (!empty($asset) && !X402_Crypto_Validator::validate_solana_address($asset) && !X402_Crypto_Validator::validate_eth_address($asset)) {
-                WC_Admin_Settings::add_error(__('Invalid asset address format.', 'x402-solana-paywall'));
+            $result = parent::process_admin_options();
+
+            if ($result) {
+                X402_Logger::info('Gateway settings validated', array(
+                    'network'          => $settings['network'],
+                    'facilitator_mode' => $settings['facilitator_mode'],
+                    'use_custom_token' => $settings['use_custom_token'],
+                ));
             }
 
-            // Validate facilitator URL
-            if (!empty($facilitator_endpoint) && !X402_Crypto_Validator::validate_facilitator_url($facilitator_endpoint)) {
-                WC_Admin_Settings::add_error(__('Invalid facilitator URL. Must use HTTPS (except for localhost).', 'x402-solana-paywall'));
+            return $result;
+        }
+
+        /**
+         * Collect posted settings in a sanitized array keyed by option name.
+         *
+         * @param array $post_data Raw post data from the settings form.
+         * @return array
+         */
+        private function collect_posted_settings(array $post_data) {
+            $fields = $this->get_form_fields();
+            $get    = function ($key, $default = '') use ($fields, $post_data) {
+                if (!isset($fields[$key])) {
+                    return $default;
+                }
+
+                return $this->get_field_value($key, $fields[$key], $post_data);
+            };
+
+            return array(
+                'pay_to'                  => trim((string) $get('pay_to')),
+                'asset'                   => trim((string) $get('asset')),
+                'network'                 => (string) $get('network', 'solana-devnet'),
+                'facilitator_endpoint'    => trim((string) $get('facilitator_endpoint')),
+                'facilitator_mode'        => (string) $get('facilitator_mode', 'base'),
+                'use_custom_token'        => (string) $get('use_custom_token', 'no'),
+                'custom_token_ca'         => trim((string) $get('custom_token_ca')),
+                'custom_token_symbol'     => trim((string) $get('custom_token_symbol')),
+                'custom_token_decimals'   => $get('custom_token_decimals', ''),
+            );
+        }
+
+        /**
+         * Validate submitted settings prior to saving.
+         *
+         * @param array $settings Sanitized settings array.
+         * @return string[] List of validation error messages.
+         */
+        private function validate_settings(array $settings) {
+            $errors = array();
+
+            if (!empty($settings['pay_to']) && !X402_Crypto_Validator::validate_solana_address($settings['pay_to']) && !X402_Crypto_Validator::validate_eth_address($settings['pay_to'])) {
+                $errors[] = __('Invalid pay-to address format.', 'x402-solana-paywall');
             }
 
-            // Validate custom token if enabled
-            $use_custom = $this->get_option('use_custom_token');
-            if ($use_custom === 'yes') {
-                $custom_ca = $this->get_option('custom_token_ca');
-                $custom_symbol = $this->get_option('custom_token_symbol');
-                $custom_decimals = $this->get_option('custom_token_decimals');
-                
-                if (empty($custom_ca)) {
-                    WC_Admin_Settings::add_error(__('Custom token contract address (CA) is required when custom token is enabled.', 'x402-solana-paywall'));
+            if (!empty($settings['asset']) && !X402_Crypto_Validator::validate_solana_address($settings['asset']) && !X402_Crypto_Validator::validate_eth_address($settings['asset'])) {
+                $errors[] = __('Invalid asset address format.', 'x402-solana-paywall');
+            }
+
+            if (!empty($settings['facilitator_endpoint']) && !X402_Crypto_Validator::validate_facilitator_url($settings['facilitator_endpoint'])) {
+                $errors[] = __('Invalid facilitator URL. Must use HTTPS (except for localhost).', 'x402-solana-paywall');
+            }
+
+            if ('yes' === $settings['use_custom_token']) {
+                if (empty($settings['custom_token_ca'])) {
+                    $errors[] = __('Custom token contract address (CA) is required when custom token is enabled.', 'x402-solana-paywall');
                 }
-                
-                if (empty($custom_symbol)) {
-                    WC_Admin_Settings::add_error(__('Custom token symbol is required.', 'x402-solana-paywall'));
+
+                if (empty($settings['custom_token_symbol'])) {
+                    $errors[] = __('Custom token symbol is required.', 'x402-solana-paywall');
                 }
-                
-                if (empty($custom_decimals) || $custom_decimals < 0 || $custom_decimals > 18) {
-                    WC_Admin_Settings::add_error(__('Custom token decimals must be between 0 and 18.', 'x402-solana-paywall'));
+
+                $decimals = '' === $settings['custom_token_decimals'] ? null : (int) $settings['custom_token_decimals'];
+
+                if (null === $decimals || $decimals < 0 || $decimals > 18) {
+                    $errors[] = __('Custom token decimals must be between 0 and 18.', 'x402-solana-paywall');
                 }
-                
-                // Validate CA format
-                $is_valid_ca = X402_Crypto_Validator::validate_eth_address($custom_ca) || 
-                               X402_Crypto_Validator::validate_solana_address($custom_ca);
-                
-                if (!$is_valid_ca) {
-                    WC_Admin_Settings::add_error(__('Invalid contract address format. Must be a valid Ethereum (0x...) or Solana (base58) address.', 'x402-solana-paywall'));
+
+                if (!empty($settings['custom_token_ca'])) {
+                    $is_valid_ca = X402_Crypto_Validator::validate_eth_address($settings['custom_token_ca']) ||
+                                   X402_Crypto_Validator::validate_solana_address($settings['custom_token_ca']);
+
+                    if (!$is_valid_ca) {
+                        $errors[] = __('Invalid contract address format. Must be a valid Ethereum (0x...) or Solana (base58) address.', 'x402-solana-paywall');
+                    }
                 }
             }
 
-            X402_Logger::info('Gateway settings validated', array(
-                'network' => $network,
-                'facilitator_mode' => $this->get_option('facilitator_mode'),
-                'use_custom_token' => $use_custom,
-            ));
+            return $errors;
         }
 
         /**
@@ -691,8 +737,18 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
                     throw new ValidationException(__('Custom facilitator endpoint is required when using the Custom Facilitator option.', 'x402-solana-paywall'));
                 }
 
+                if (!X402_Crypto_Validator::validate_facilitator_url($endpoint)) {
+                    throw new ValidationException(__('Custom facilitator endpoint must be a valid HTTPS URL (localhost allowed).', 'x402-solana-paywall'));
+                }
+
+                $sanitized_endpoint = esc_url_raw($endpoint, array('http', 'https'));
+
+                if ('' === $sanitized_endpoint) {
+                    throw new ValidationException(__('Custom facilitator endpoint is not a valid URL.', 'x402-solana-paywall'));
+                }
+
                 $api_key = $this->get_option('facilitator_api_key');
-                return FacilitatorClient::selfHosted($endpoint, $api_key ? (string) $api_key : null);
+                return FacilitatorClient::selfHosted($sanitized_endpoint, $api_key ? (string) $api_key : null);
             }
 
             return null;
@@ -891,7 +947,7 @@ if (!class_exists('X402_WooCommerce_Gateway') && class_exists('WC_Payment_Gatewa
          */
         public function payment_fields() {
             if ($this->description) {
-                echo wpautop(wptautokses_post($this->description));
+                echo wpautop(wp_kses_post($this->description));
             }
             
             // Display custom token info if enabled

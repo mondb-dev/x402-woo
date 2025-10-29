@@ -168,11 +168,18 @@ class X402_Logger {
      */
     public static function log_facilitator_response($status_code, $response = array()) {
         $level = $status_code >= 200 && $status_code < 300 ? 'info' : 'error';
-        
-        self::$level('Facilitator response', array(
-            'status_code' => $status_code,
-            'response' => self::sanitize_log_data($response),
-        ));
+
+        if (method_exists(__CLASS__, $level)) {
+            call_user_func(array(__CLASS__, $level), 'Facilitator response', array(
+                'status_code' => $status_code,
+                'response'    => self::sanitize_log_data($response),
+            ));
+        } else {
+            self::info('Facilitator response', array(
+                'status_code' => $status_code,
+                'response'    => self::sanitize_log_data($response),
+            ));
+        }
     }
 
     /**

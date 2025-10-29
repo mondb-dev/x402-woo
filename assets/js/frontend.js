@@ -165,13 +165,18 @@
      * Verify manual payment
      */
     function verifyManualPayment(postId) {
+        if (typeof x402_ajax === 'undefined') {
+            console.error('x402_ajax localization is missing.');
+            return;
+        }
+
         // Trigger AJAX verification
         $.ajax({
-            url: x402_vars.ajax_url,
+            url: x402_ajax.ajax_url,
             type: 'POST',
             data: {
                 action: 'x402_verify_payment',
-                nonce: x402_vars.payment_nonce,
+                _wpnonce: x402_ajax.verify_nonce,
                 post_id: postId
             },
             success: function(response) {
@@ -297,6 +302,11 @@
      * Verify payment
      */
     function verifyPayment() {
+        if (typeof x402_ajax === 'undefined') {
+            console.error('x402_ajax localization is missing.');
+            return;
+        }
+
         var $button = $('#x402-verify-payment');
         var $status = $('.x402-status-message');
         var $walletInput = $('#x402-wallet-address');
@@ -330,7 +340,7 @@
             type: 'POST',
             data: {
                 action: 'x402_verify_payment',
-                nonce: x402_ajax.nonce,
+                _wpnonce: x402_ajax.verify_nonce,
                 post_id: postId,
                 wallet_address: walletAddress,
                 signature: signature
