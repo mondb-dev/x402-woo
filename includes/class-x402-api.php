@@ -35,7 +35,7 @@ class X402_API {
      */
     public static function verify_payment() {
         // Verify nonce
-        if (!check_ajax_referer('x402_payment_nonce', 'nonce', false)) {
+        if (!class_exists('X402_Security_Handler') || !X402_Security_Handler::verify_nonce(X402_Security_Handler::VERIFY_PAYMENT_ACTION)) {
             wp_send_json_error(
                 array(
                     'message' => __('Security check failed', 'x402-solana-paywall'),
@@ -86,7 +86,7 @@ class X402_API {
             array(
                 'methods'             => WP_REST_Server::READABLE,
                 'callback'            => array(__CLASS__, 'get_order_payment_request'),
-                'permission_callback' => '__return_true',
+                'permission_callback' => array(__CLASS__, 'can_access_order_payment_request'),
                 'args'                => array(
                     'order_id' => array(
                         'required'          => true,
@@ -167,5 +167,42 @@ class X402_API {
                 'encoded'  => $payload['encoded'],
             )
         );
+    }
+
+    /**
+     * Restrict access to order payment requests exposed over REST.
+     *
+     * @param WP_REST_Request $request Request instance.
+     * @return bool
+     */
+    public static function can_access_order_payment_request(WP_REST_Request $request) {
+        if (!class_exists('WC_Order')) {
+            return current_user_can('manage_woocommerce') || current_user_can('manage_options');
+        }
+
+        $order_id = (int) $request->get_param('order_id');
+        $order    = wc_get_order($order_id);
+
+        if (!$order instanceof WC_Order) {
+            return false;
+        }
+
+        if (class_exists('X402_Security_Handler') && X402_Security_Handler::can_manage_payments()) {
+            return true;
+        }
+
+        $user_id = get_current_user_id();
+
+        if ($user_id > 0 && (int) $order->get_customer_id() === (int) $user_id) {
+            return true;
+        }
+
+        $provided_key = (string) $request->get_param('key');
+
+        if ('' !== $provided_key && hash_equals($order->get_order_key(), $provided_key)) {
+            return true;
+        }
+
+        return false;
     }
 }
